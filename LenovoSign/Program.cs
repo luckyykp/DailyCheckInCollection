@@ -12,7 +12,7 @@ namespace LenovoSign
         {
             string username = "";
             string password = "";
-            string mode = "";
+            string mode = "smzdm";
             Parser.Default.ParseArguments<Options>(args)
                .WithParsed(o =>
                {
@@ -98,7 +98,7 @@ namespace LenovoSign
             public string password { get; set; }
 
             [Option('m', "mode", Required = false, HelpText = "模式")]
-            public string mode { get; set; }
+            public string mode { get; set; } = "";
         }
 
     }
