@@ -3,6 +3,7 @@ using System;
 using Helper;
 using Yinhe.ProcessingCenter;
 using System.Threading;
+using MongoDB.Bson;
 
 namespace LenovoSign
 {
@@ -10,9 +11,11 @@ namespace LenovoSign
     {
         private static void Main(string[] args)
         {
+           
             string username = "";
             string password = "";
-            string mode = "smzdm";
+            string mode = "";//smzdm
+
             Parser.Default.ParseArguments<Options>(args)
                .WithParsed(o =>
                {
@@ -80,15 +83,69 @@ namespace LenovoSign
             var step2 = t.GetToken(step1);
             var step3 = t.GetSessionId(step2);
             var step4 = t.DaySign(step3.Res.Lenovoid, step3.Res.Sessionid, step3.Res.Token);
-
+            //执行小游戏签到
+            var step5= LenovoAcitvieSign_H5(step3.Res.Lenovoid.ToString(), step3.Res.Sessionid, step3.Res.Cookieval);
             if (step4.Res.Success) Console.WriteLine("签到成功");
-            var result = $"执行结果:{step4.Res.Success}_{username}";
+            var result = $"执行结果:{step4.Res.Success}_{username}_AcitvieSign执行结果『{step5}』";
             Console.WriteLine($"签到结果:{step4.Res.RewardTips}_{username}");
             SignModelHelper.Instance().SendMail("执行通知_sign", result);
             Console.WriteLine();
         }
+        
+        /// <summary>
+        /// 种树小游戏登录并且完成自动任务
+        /// </summary>
+        public static bool LenovoAcitvieSign_H5(string lenovoid,string sessionid,string token)
+        {
+            try
+            {
+                var ssoHelper = new LenovoUtils_Membership(lenovoid, sessionid, token);
+                if (ssoHelper.SSOCheck())
+                {
+                    var ret_check = ssoHelper.CheckIn();
+                    var taskList = ssoHelper.QueryTaskList();
+                    Console.WriteLine($"获取到任务{taskList.Count}");
+                    var retryCount = 0;
+                    while (taskList.Count > 0 && retryCount++ <= 2)
+                    {
+                        foreach (var doc in taskList)
+                        {
+                            var id = doc.Text("id");
+                            if (doc.Text("finished") == "0")
+                            {
+                                var ret1 = ssoHelper.FinishUserTask(id);
+                                if (ret1)
+                                {
+                                    Console.WriteLine($"完成任务{doc.Text("name")}_{doc.Text("bonusValue")}");
+                                }
+                                Thread.Sleep(1000);
+                            }
+                            if (doc.Text("prizeState") == "0")
+                            {
+                                Console.WriteLine($"领取奖励任务{doc.Text("name")}_{doc.Text("bonusValue")}");
+                                var ret2 = ssoHelper.receivePrize(id);
+                                Thread.Sleep(1000);
+                            }
+                        }
+                        taskList = ssoHelper.QueryTaskList();
+                        if (taskList.Count > 0)
+                        {
+                            Console.WriteLine($"剩余任务{taskList}");
+                            Thread.Sleep(60000);//60秒后重试
+                        }
 
+                    }
+                    //Console.WriteLine(ret.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                return false;
+            }
+            return true;
 
+        }
         public class Options
         {
             [Option('u', "username", Required = true, HelpText = "用户名")]

@@ -145,6 +145,8 @@
     <Compile Include="LenovoBaseInfoModel.cs" />
     <Compile Include="LenovoSessionIdResultModel.cs" />
     <Compile Include="LenovoSignResultModel.cs" />
+    <Compile Include="RSAHelper.cs" />
+    <Compile Include="LenovoUtils_Membership.cs" />
     <Compile Include="SignModelHelper.cs" />
     <Compile Include="LenovoUtils.cs" />
     <Compile Include="Program.cs" />
