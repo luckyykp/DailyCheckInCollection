@@ -4,6 +4,10 @@ using Helper;
 using Yinhe.ProcessingCenter;
 using System.Threading;
 using MongoDB.Bson;
+using System.Linq;
+using System.Text;
+using System.Web;
+using System.Collections.Generic;
 
 namespace LenovoSign
 {
@@ -11,7 +15,10 @@ namespace LenovoSign
     {
         private static void Main(string[] args)
         {
-           
+            // TestTESLA();
+            //QuickQuartzActionJob.Instance().Run((obj) => { /*TestTESLA*/(); }, "key", "124", "0 0 0-6 * * ? ");
+            //Console.Read();
+           // return;
             string username = "";
             string password = "";
             string mode = "";//smzdm
@@ -26,6 +33,10 @@ namespace LenovoSign
             Console.WriteLine(mode);
             switch (mode.ToLower())
             {
+                case "tsl":
+                    TestTESLA(username);//tesla
+
+                    break;
                 case "smzdm":
                     SignModelHelper.Instance().CheckIn_SMZDM();//什么值得买签到
                    
@@ -148,7 +159,7 @@ namespace LenovoSign
         }
         public class Options
         {
-            [Option('u', "username", Required = true, HelpText = "用户名")]
+            [Option('u', "username", Required = true, HelpText = "用户名/地区等")]
             public string username { get; set; }
 
             [Option('p', "password", Required = true, HelpText = "密码")]
@@ -158,5 +169,97 @@ namespace LenovoSign
             public string mode { get; set; } = "";
         }
 
+        public static void TestAmazon()
+        {
+            var url = "https://www.amazon.cn/dp/B07MBQPQ62/?coliid=IOCT298XR3KYN&colid=22SP37IGDPKFX&ref_=lv_ov_lig_dp_it&th=1";
+            var ret=url.UrlGetHtml();
+            var htmlObj = ret.HtmlLoad();
+            var twisterAvailability = htmlObj.GetElementbyId("availability");
+            if (twisterAvailability!=null&&!string.IsNullOrEmpty(twisterAvailability.InnerText)&& !twisterAvailability.InnerText.Contains("目前无货"))
+            {
+                //发送邮件
+                var result = $"执行结果:无内鬼快点交易";
+                Console.WriteLine($"查找结果:{result}");
+                SignModelHelper.Instance().SendMail("执行通知_sign", result);
+            }
+        }
+
+        public static void TestTESLA(string place)
+        {
+            Console.WriteLine("start TestTESLAJobMonitor");
+            Tesla_Work_Software(place);
+            Console.WriteLine("end TestTESLAJobMonitor");
+        }
+        /// <summary>
+        /// xm，泉州是否有匹配的work
+        /// </summary>
+        public static void Tesla_Work_Software(string place="厦门")
+        {
+            var info = new StringBuilder();
+            try
+            {
+                var url_xm = $"https://www.tesla.cn/careers/search/?country=CN&location={HttpUtility.UrlEncode(place)}";
+               // var url_qz = $"https://www.tesla.cn/careers/search/?country=CN&location={HttpUtility.UrlEncode("泉州")}";
+                var keyWords = new string[] { "c#", "netcore", "softwareengineer", "go", "" };
+              
+                var url = "https://www.tesla.cn/cua-api/apps/careers/state?1=2";
+                var ret = url.UrlGetHtml(config:(conf)=> {
+
+                    conf.Accept = "application/json, text/plain, */*";
+                    conf.Referer = "https://www.tesla.cn/careers/search/?country=CN&department=6&location=%E4%B8%8A%E6%B5%B7";
+                    conf.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.131 Safari/537.36";
+                });
+                if (string.IsNullOrEmpty(ret))
+                {
+                    
+                    return;
+                }
+                //dp=6  软件开发工程师
+                var root = ret.GetBsonDocFromJson();
+                var listings = root.GetBsonDocumentList("listings").ToList();
+                var lookUp = root.GetBsonDocument("lookup");
+                var locations = lookUp.GetBsonDocument("locations");
+                var departs = lookUp.GetBsonDocument("departments");
+                var location_xms = locations.Elements.Where(c => c.Value.ToString().Contains(place)).Select(c => c.Name).ToList();
+               // var location_qzs = locations.Elements.Where(c => c.Value.ToString().Contains("泉州")).Select(c => c.Name).ToList();
+                var depart_software = departs.Elements.Where(c => c.Value.ToString().Contains("Engineering & Information Technology")).FirstOrDefault()?.Name.ToString();
+                if (string.IsNullOrEmpty(depart_software))
+                {
+                    depart_software = "6";
+                }
+
+                var sofewareJobs = listings.Where(c => c.Text("dp") == depart_software).ToList();//软件开发
+
+                var jobs_xm = sofewareJobs.Where(c => location_xms.Contains(c.Text("l"))).ToList();//厦门工作
+               // var jobs_qz = sofewareJobs.Where(c => location_qzs.Contains(c.Text("l"))).ToList();//泉州工作
+                
+                if (jobs_xm.Count > 0)
+                {
+                    var jobDetail = jobs_xm.Aggregate("", (s1, s2) => $"{s1}\n{s2.Text("t")}_{s2.Text("dp")}_{s2.Text("l")}");
+                    if (jobs_xm.Any(d => keyWords.Any(c => d.Text("t").Replace(" ", "").ToLower().Contains(c))))
+                    {
+                        jobDetail += "\nNetCore 匹配";
+                    }
+                    else
+                    {
+                        jobDetail += "\nNetCore 暂无";
+                    }
+                    info.AppendLine($"执行结果TESLA:厦门咸鱼翻身的机会来了注意查收 每日更新『{url_xm}』\n详情:{jobDetail}");
+                }
+                 
+            }
+            catch (Exception ex)
+            {
+                info.AppendLine(ex.Message+"请更新自动化程序");
+            }
+            //发送邮件
+            if (!string.IsNullOrEmpty(info.ToString())) {
+                Console.WriteLine($"查找结果:{info.ToString()}");
+                SignModelHelper.Instance().SendMail("执行通知_sign", info.ToString());
+            }
+           
+        }
+
+ 
     }
 }
